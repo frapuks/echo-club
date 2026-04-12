@@ -17,6 +17,7 @@ export interface Group {
   name: string;
   clubId: string;
   category: string;
+  order?: number;
   createdAt: Timestamp;
 }
 

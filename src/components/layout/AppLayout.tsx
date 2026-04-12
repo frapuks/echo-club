@@ -10,7 +10,6 @@ import {
   Typography,
 } from "@mui/material";
 import AccountCircle from "@mui/icons-material/AccountCircle";
-import Settings from "@mui/icons-material/Settings";
 import { useAuth } from "../../contexts/AuthContext";
 import AppLogo from "../AppLogo";
 
@@ -48,11 +47,6 @@ export default function AppLayout() {
 
           {userProfile && (
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              {userProfile.admin && (
-                <IconButton color="inherit" onClick={() => navigate("/club")}>
-                  <Settings />
-                </IconButton>
-              )}
               <Typography variant="body2">
                 {userProfile.firstName}
               </Typography>
@@ -66,8 +60,8 @@ export default function AppLayout() {
                 anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
                 transformOrigin={{ vertical: "top", horizontal: "right" }}
               >
-                <MenuItem onClick={() => { handleClose(); navigate("/profil"); }}>
-                  Mon profil
+                <MenuItem onClick={() => { handleClose(); navigate("/reglages"); }}>
+                  Réglages
                 </MenuItem>
                 <MenuItem onClick={handleLogout}>Se déconnecter</MenuItem>
               </Menu>

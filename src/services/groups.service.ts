@@ -34,7 +34,15 @@ export async function getCategoryGroups(
     where("category", "==", category)
   );
   const snapshot = await getDocs(q);
-  return snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Group) }));
+  return snapshot.docs
+    .map((d) => ({ id: d.id, ...(d.data() as Group) }))
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+}
+
+export async function reorderGroups(groupIds: string[]): Promise<void> {
+  for (let i = 0; i < groupIds.length; i++) {
+    await updateDoc(doc(db, "groups", groupIds[i]), { order: i });
+  }
 }
 
 export async function createGroup(
@@ -42,13 +50,25 @@ export async function createGroup(
   name: string,
   category: string
 ): Promise<string> {
+  const existing = await getCategoryGroups(clubId, category);
   const ref = await addDoc(collection(db, "groups"), {
     name,
     clubId,
     category,
+    order: existing.length,
     createdAt: serverTimestamp(),
   });
   return ref.id;
+}
+
+export async function deleteGroup(groupId: string): Promise<void> {
+  const q = query(
+    collection(db, "groupMembers"),
+    where("groupId", "==", groupId)
+  );
+  const snapshot = await getDocs(q);
+  await Promise.all(snapshot.docs.map((d) => deleteDoc(d.ref)));
+  await deleteDoc(doc(db, "groups", groupId));
 }
 
 export interface UserGroupMembership {

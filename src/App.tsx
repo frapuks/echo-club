@@ -6,9 +6,7 @@ import AppLayout from "./components/layout/AppLayout";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import DashboardPage from "./pages/DashboardPage";
-import ProfilePage from "./pages/ProfilePage";
-import ClubSettingsPage from "./pages/ClubSettingsPage";
-import CategoryPage from "./pages/CategoryPage";
+import SettingsPage from "./pages/SettingsPage";
 
 export default function App() {
   return (
@@ -23,9 +21,7 @@ export default function App() {
           <Route element={<ProtectedRoute />}>
             <Route element={<AppLayout />}>
               <Route path="/" element={<DashboardPage />} />
-              <Route path="/profil" element={<ProfilePage />} />
-              <Route path="/club" element={<ClubSettingsPage />} />
-              <Route path="/categories/:category" element={<CategoryPage />} />
+              <Route path="/reglages" element={<SettingsPage />} />
             </Route>
           </Route>
         </Routes>
