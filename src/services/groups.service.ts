@@ -17,7 +17,6 @@ import type {
   GroupMember,
   GroupMemberWithProfile,
   GroupRole,
-  Position,
 } from "../types/group";
 import type { UserProfile } from "../types/user";
 
@@ -108,7 +107,7 @@ export async function getGroupMembers(
         lastName: profile.lastName,
         email: profile.email,
         roles: m.roles,
-        position: m.position,
+        position: profile.position,
       });
     }
   }
@@ -224,9 +223,3 @@ export async function updateGroupMemberRoles(
   await updateDoc(doc(db, "groupMembers", memberId), { roles });
 }
 
-export async function updateGroupMemberPosition(
-  memberId: string,
-  position: Position | null
-): Promise<void> {
-  await updateDoc(doc(db, "groupMembers", memberId), { position: position ?? null });
-}

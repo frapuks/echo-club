@@ -13,11 +13,16 @@ import {
   Card,
   CardContent,
   Divider,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
   TextField,
   Typography,
 } from "@mui/material";
 import { useAuth } from "../contexts/AuthContext";
 import { db } from "../config/firebase";
+import { POSITIONS, type Position } from "../types/group";
 
 interface ProfileForm {
   firstName: string;
@@ -36,6 +41,7 @@ export default function ProfilePage() {
   const [profileSuccess, setProfileSuccess] = useState("");
   const [profileError, setProfileError] = useState("");
   const [profileSubmitting, setProfileSubmitting] = useState(false);
+  const [position, setPosition] = useState<Position | "">(userProfile?.position ?? "");
 
   const [passwordSuccess, setPasswordSuccess] = useState("");
   const [passwordError, setPasswordError] = useState("");
@@ -62,6 +68,7 @@ export default function ProfilePage() {
         firstName: data.firstName,
         lastName: data.lastName,
         displayName: `${data.firstName} ${data.lastName}`,
+        position: position || null,
       });
       await refreshProfile();
       setProfileSuccess("Profil mis à jour.");
@@ -159,6 +166,20 @@ export default function ProfilePage() {
               disabled
               helperText="L'email ne peut pas être modifié."
             />
+
+            <FormControl fullWidth margin="normal">
+              <InputLabel>Poste</InputLabel>
+              <Select
+                value={position}
+                label="Poste"
+                onChange={(e) => setPosition(e.target.value as Position | "")}
+              >
+                <MenuItem value="">Aucun</MenuItem>
+                {POSITIONS.map((p) => (
+                  <MenuItem key={p} value={p}>{p}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
 
             <Button
               type="submit"

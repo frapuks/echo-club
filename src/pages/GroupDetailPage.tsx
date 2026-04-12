@@ -33,9 +33,8 @@ import {
   getGroupMembers,
   addGroupMember,
   removeGroupMember,
-  updateGroupMemberPosition,
 } from "../services/groups.service";
-import { getCategoryPlayers, type MemberWithId } from "../services/members.service";
+import { getCategoryPlayers, setMemberPosition, type MemberWithId } from "../services/members.service";
 import type { GroupMemberWithProfile, GroupRole, GroupWithId, Position } from "../types/group";
 import { POSITIONS } from "../types/group";
 
@@ -88,18 +87,10 @@ export default function GroupDetailPage() {
     try {
       await addGroupMember(groupId, userProfile.clubId, selectedUserId, selectedRoles);
       if (selectedPosition) {
-        const updated = await getGroupMembers(groupId);
-        const newMember = updated.find((m) => m.userId === selectedUserId);
-        if (newMember) {
-          await updateGroupMemberPosition(newMember.memberId, selectedPosition);
-        }
-        setMembers(updated.map((m) =>
-          m.userId === selectedUserId ? { ...m, position: selectedPosition || undefined } : m
-        ));
-      } else {
-        const updated = await getGroupMembers(groupId);
-        setMembers(updated);
+        await setMemberPosition(selectedUserId, selectedPosition);
       }
+      const updated = await getGroupMembers(groupId);
+      setMembers(updated);
       setDialogOpen(false);
       setSelectedUserId("");
       setSelectedRoles(["player"]);
@@ -126,8 +117,10 @@ export default function GroupDetailPage() {
   };
 
   const handlePositionChange = async (memberId: string, position: Position | null) => {
+    const member = members.find((m) => m.memberId === memberId);
+    if (!member) return;
     try {
-      await updateGroupMemberPosition(memberId, position);
+      await setMemberPosition(member.userId, position);
       setMembers((prev) =>
         prev.map((m) =>
           m.memberId === memberId ? { ...m, position: position ?? undefined } : m

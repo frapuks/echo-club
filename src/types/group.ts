@@ -29,7 +29,6 @@ export interface GroupMember {
   clubId: string;
   userId: string;
   roles: GroupRole[];
-  position?: Position;
   createdAt: Timestamp;
 }
 
