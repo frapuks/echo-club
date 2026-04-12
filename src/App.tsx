@@ -7,8 +7,8 @@ import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import DashboardPage from "./pages/DashboardPage";
 import ProfilePage from "./pages/ProfilePage";
-import MembersPage from "./pages/MembersPage";
 import ClubSettingsPage from "./pages/ClubSettingsPage";
+import CategoryPage from "./pages/CategoryPage";
 import GroupDetailPage from "./pages/GroupDetailPage";
 
 export default function App() {
@@ -25,8 +25,8 @@ export default function App() {
             <Route element={<AppLayout />}>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/profil" element={<ProfilePage />} />
-              <Route path="/membres" element={<MembersPage />} />
               <Route path="/club" element={<ClubSettingsPage />} />
+              <Route path="/categories/:category" element={<CategoryPage />} />
               <Route path="/groupes/:groupId" element={<GroupDetailPage />} />
             </Route>
           </Route>

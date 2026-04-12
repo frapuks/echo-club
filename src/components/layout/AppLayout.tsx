@@ -10,7 +10,6 @@ import {
   Typography,
 } from "@mui/material";
 import AccountCircle from "@mui/icons-material/AccountCircle";
-import People from "@mui/icons-material/People";
 import Settings from "@mui/icons-material/Settings";
 import { useAuth } from "../../contexts/AuthContext";
 import AppLogo from "../AppLogo";
@@ -50,14 +49,9 @@ export default function AppLayout() {
           {userProfile && (
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               {userProfile.admin && (
-                <>
-                  <IconButton color="inherit" onClick={() => navigate("/membres")}>
-                    <People />
-                  </IconButton>
-                  <IconButton color="inherit" onClick={() => navigate("/club")}>
-                    <Settings />
-                  </IconButton>
-                </>
+                <IconButton color="inherit" onClick={() => navigate("/club")}>
+                  <Settings />
+                </IconButton>
               )}
               <Typography variant="body2">
                 {userProfile.firstName}

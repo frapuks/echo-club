@@ -28,6 +28,8 @@ export async function register(data: RegisterData): Promise<void> {
       displayName: `${data.firstName} ${data.lastName}`,
       firstName: data.firstName,
       lastName: data.lastName,
+      coachCategories: [],
+      playerCategories: [],
       createdAt: serverTimestamp(),
     });
   } catch (error) {

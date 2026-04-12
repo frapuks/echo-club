@@ -27,57 +27,57 @@ import Delete from "@mui/icons-material/Delete";
 import PersonAdd from "@mui/icons-material/PersonAdd";
 import ArrowBack from "@mui/icons-material/ArrowBack";
 import { useAuth } from "../contexts/AuthContext";
+import { canManageCategory } from "../utils/permissions";
 import {
   getGroup,
   getGroupMembers,
   addGroupMember,
   removeGroupMember,
-  updateGroupMemberRole,
+  updateGroupMemberPosition,
 } from "../services/groups.service";
-import { getClubMembers } from "../services/members.service";
-import type { GroupMemberWithProfile, GroupRole } from "../types/group";
-import type { MemberWithId } from "../services/members.service";
-
-const groupRoleOptions: { value: GroupRole; label: string }[] = [
-  { value: "coach", label: "Coach" },
-  { value: "player", label: "Joueur" },
-];
+import { getCategoryPlayers, type MemberWithId } from "../services/members.service";
+import type { GroupMemberWithProfile, GroupRole, GroupWithId, Position } from "../types/group";
+import { POSITIONS } from "../types/group";
 
 export default function GroupDetailPage() {
   const { groupId } = useParams<{ groupId: string }>();
   const { userProfile } = useAuth();
   const navigate = useNavigate();
-  const isAdmin = userProfile?.admin === true;
 
-  const [groupName, setGroupName] = useState("");
+  const [group, setGroup] = useState<GroupWithId | null>(null);
   const [members, setMembers] = useState<GroupMemberWithProfile[]>([]);
-  const [clubMembers, setClubMembers] = useState<MemberWithId[]>([]);
+  const [categoryMembers, setCategoryMembers] = useState<MemberWithId[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState("");
-  const [selectedRole, setSelectedRole] = useState<GroupRole>("player");
+  const [selectedRoles, setSelectedRoles] = useState<GroupRole[]>(["player"]);
+  const [selectedPosition, setSelectedPosition] = useState<Position | "">("");
   const [adding, setAdding] = useState(false);
+
+  const canManage = group ? canManageCategory(userProfile, group.category) : false;
 
   useEffect(() => {
     if (!groupId || !userProfile?.clubId) return;
 
-    Promise.all([
-      getGroup(groupId),
-      getGroupMembers(groupId),
-      getClubMembers(userProfile.clubId),
-    ])
-      .then(([group, groupMembers, allMembers]) => {
-        setGroupName(group?.name ?? "");
+    getGroup(groupId)
+      .then(async (g) => {
+        if (!g) return;
+        setGroup(g);
+
+        const [groupMembers, catMembers] = await Promise.all([
+          getGroupMembers(groupId),
+          getCategoryPlayers(userProfile.clubId!, g.category),
+        ]);
         setMembers(groupMembers);
-        setClubMembers(allMembers);
+        setCategoryMembers(catMembers);
       })
       .catch(() => setError("Erreur lors du chargement."))
       .finally(() => setLoading(false));
   }, [groupId, userProfile?.clubId]);
 
-  const availableMembers = clubMembers.filter(
+  const availableMembers = categoryMembers.filter(
     (cm) => !members.some((m) => m.userId === cm.uid)
   );
 
@@ -86,13 +86,24 @@ export default function GroupDetailPage() {
     setAdding(true);
     setError("");
     try {
-      await addGroupMember(groupId, userProfile.clubId, selectedUserId, selectedRole);
-      // Refresh members
-      const updated = await getGroupMembers(groupId);
-      setMembers(updated);
+      await addGroupMember(groupId, userProfile.clubId, selectedUserId, selectedRoles);
+      if (selectedPosition) {
+        const updated = await getGroupMembers(groupId);
+        const newMember = updated.find((m) => m.userId === selectedUserId);
+        if (newMember) {
+          await updateGroupMemberPosition(newMember.memberId, selectedPosition);
+        }
+        setMembers(updated.map((m) =>
+          m.userId === selectedUserId ? { ...m, position: selectedPosition || undefined } : m
+        ));
+      } else {
+        const updated = await getGroupMembers(groupId);
+        setMembers(updated);
+      }
       setDialogOpen(false);
       setSelectedUserId("");
-      setSelectedRole("player");
+      setSelectedRoles(["player"]);
+      setSelectedPosition("");
     } catch (err: unknown) {
       const e = err as { message?: string };
       if (e.message === "ALREADY_MEMBER") {
@@ -114,16 +125,21 @@ export default function GroupDetailPage() {
     }
   };
 
-  const handleRoleChange = async (memberId: string, role: GroupRole) => {
+  const handlePositionChange = async (memberId: string, position: Position | null) => {
     try {
-      await updateGroupMemberRole(memberId, role);
+      await updateGroupMemberPosition(memberId, position);
       setMembers((prev) =>
-        prev.map((m) => (m.memberId === memberId ? { ...m, role } : m))
+        prev.map((m) =>
+          m.memberId === memberId ? { ...m, position: position ?? undefined } : m
+        )
       );
     } catch {
-      setError("Erreur lors de la modification du rôle.");
+      setError("Erreur lors de la modification du poste.");
     }
   };
+
+  const coaches = members.filter((m) => m.roles.includes("coach"));
+  const players = members.filter((m) => m.roles.includes("player"));
 
   if (loading) {
     return (
@@ -136,13 +152,13 @@ export default function GroupDetailPage() {
   return (
     <Box>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
-        <IconButton onClick={() => navigate("/membres")}>
+        <IconButton onClick={() => navigate(group ? `/categories/${group.category}` : "/")}>
           <ArrowBack />
         </IconButton>
         <Typography variant="h4" sx={{ flexGrow: 1 }}>
-          {groupName}
+          {group?.name}
         </Typography>
-        {isAdmin && (
+        {canManage && (
           <Button
             variant="contained"
             startIcon={<PersonAdd />}
@@ -160,71 +176,34 @@ export default function GroupDetailPage() {
         </Alert>
       )}
 
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Nom</TableCell>
-              <TableCell>Prénom</TableCell>
-              <TableCell>Rôle dans le groupe</TableCell>
-              {isAdmin && <TableCell align="right">Actions</TableCell>}
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {members.map((member) => (
-              <TableRow key={member.memberId}>
-                <TableCell>{member.lastName}</TableCell>
-                <TableCell>{member.firstName}</TableCell>
-                <TableCell>
-                  {isAdmin ? (
-                    <FormControl size="small" sx={{ minWidth: 120 }}>
-                      <Select
-                        value={member.role}
-                        onChange={(e) =>
-                          handleRoleChange(member.memberId, e.target.value as GroupRole)
-                        }
-                      >
-                        {groupRoleOptions.map((opt) => (
-                          <MenuItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  ) : (
-                    groupRoleOptions.find((o) => o.value === member.role)?.label ?? "Joueur"
-                  )}
-                </TableCell>
-                {isAdmin && (
-                  <TableCell align="right">
-                    <IconButton
-                      color="error"
-                      size="small"
-                      onClick={() => handleRemove(member.memberId)}
-                    >
-                      <Delete fontSize="small" />
-                    </IconButton>
-                  </TableCell>
-                )}
-              </TableRow>
-            ))}
-            {members.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={isAdmin ? 4 : 3} align="center">
-                  Aucun membre dans ce groupe.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      {/* Coachs */}
+      <Typography variant="h5" sx={{ mb: 2 }}>
+        Coachs
+      </Typography>
+      <MemberPositionTable
+        members={coaches}
+        canManage={canManage}
+        showPosition={false}
+        emptyMessage="Aucun coach dans ce groupe."
+        onPositionChange={handlePositionChange}
+        onRemove={handleRemove}
+      />
 
-      <Dialog
-        open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
-        maxWidth="xs"
-        fullWidth
-      >
+      {/* Joueurs */}
+      <Typography variant="h5" sx={{ mt: 4, mb: 2 }}>
+        Joueurs
+      </Typography>
+      <MemberPositionTable
+        members={players}
+        canManage={canManage}
+        showPosition={true}
+        emptyMessage="Aucun joueur dans ce groupe."
+        onPositionChange={handlePositionChange}
+        onRemove={handleRemove}
+      />
+
+      {/* Dialog ajout */}
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Ajouter un membre</DialogTitle>
         <DialogContent>
           <FormControl fullWidth margin="normal">
@@ -243,16 +222,15 @@ export default function GroupDetailPage() {
           </FormControl>
 
           <FormControl fullWidth margin="normal">
-            <InputLabel>Rôle</InputLabel>
+            <InputLabel>Poste</InputLabel>
             <Select
-              value={selectedRole}
-              label="Rôle"
-              onChange={(e) => setSelectedRole(e.target.value as GroupRole)}
+              value={selectedPosition}
+              label="Poste"
+              onChange={(e) => setSelectedPosition(e.target.value as Position | "")}
             >
-              {groupRoleOptions.map((opt) => (
-                <MenuItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </MenuItem>
+              <MenuItem value="">Aucun</MenuItem>
+              {POSITIONS.map((p) => (
+                <MenuItem key={p} value={p}>{p}</MenuItem>
               ))}
             </Select>
           </FormControl>
@@ -269,5 +247,96 @@ export default function GroupDetailPage() {
         </DialogActions>
       </Dialog>
     </Box>
+  );
+}
+
+function MemberPositionTable({
+  members,
+  canManage,
+  showPosition = true,
+  emptyMessage,
+  onPositionChange,
+  onRemove,
+}: {
+  members: GroupMemberWithProfile[];
+  canManage: boolean;
+  showPosition?: boolean;
+  emptyMessage: string;
+  onPositionChange: (memberId: string, position: Position | null) => void;
+  onRemove: (memberId: string) => void;
+}) {
+  const colCount = 2 + (showPosition ? 1 : 0) + (canManage ? 1 : 0);
+  return (
+    <TableContainer component={Paper}>
+      <Table sx={{ tableLayout: "fixed" }}>
+        <colgroup>
+          <col style={{ width: "25%" }} />
+          <col style={{ width: "25%" }} />
+          {showPosition && <col style={{ width: "30%" }} />}
+          {canManage && <col style={{ width: showPosition ? "20%" : "50%" }} />}
+        </colgroup>
+        <TableHead>
+          <TableRow>
+            <TableCell>Nom</TableCell>
+            <TableCell>Prénom</TableCell>
+            {showPosition && <TableCell>Poste</TableCell>}
+            {canManage && <TableCell align="right">Actions</TableCell>}
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {members.map((member) => (
+            <TableRow key={member.memberId}>
+              <TableCell>{member.lastName}</TableCell>
+              <TableCell>{member.firstName}</TableCell>
+              {showPosition && (
+                <TableCell>
+                  {canManage ? (
+                    <FormControl size="small" sx={{ minWidth: 150 }}>
+                      <Select
+                        value={member.position ?? ""}
+                        displayEmpty
+                        onChange={(e) =>
+                          onPositionChange(
+                            member.memberId,
+                            e.target.value ? (e.target.value as Position) : null
+                          )
+                        }
+                      >
+                        <MenuItem value="">—</MenuItem>
+                        {POSITIONS.map((p) => (
+                          <MenuItem key={p} value={p}>{p}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  ) : (
+                    <Typography variant="body2">
+                      {member.position ?? "—"}
+                    </Typography>
+                  )}
+                </TableCell>
+              )}
+              {canManage && (
+                <TableCell align="right">
+                  <IconButton
+                    color="error"
+                    size="small"
+                    onClick={() => onRemove(member.memberId)}
+                  >
+                    <Delete fontSize="small" />
+                  </IconButton>
+                </TableCell>
+              )}
+            </TableRow>
+          ))}
+          {members.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={colCount} align="center">
+                {emptyMessage}
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+    </TableContainer>
   );
 }

@@ -17,6 +17,7 @@ import type {
   GroupMember,
   GroupMemberWithProfile,
   GroupRole,
+  Position,
 } from "../types/group";
 import type { UserProfile } from "../types/user";
 
@@ -32,13 +33,28 @@ export async function getClubGroups(clubId: string): Promise<GroupWithId[]> {
   return snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Group) }));
 }
 
+export async function getCategoryGroups(
+  clubId: string,
+  category: string
+): Promise<GroupWithId[]> {
+  const q = query(
+    collection(db, "groups"),
+    where("clubId", "==", clubId),
+    where("category", "==", category)
+  );
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as Group) }));
+}
+
 export async function createGroup(
   clubId: string,
-  name: string
+  name: string,
+  category: string
 ): Promise<string> {
   const ref = await addDoc(collection(db, "groups"), {
     name,
     clubId,
+    category,
     createdAt: serverTimestamp(),
   });
   return ref.id;
@@ -91,7 +107,8 @@ export async function getGroupMembers(
         firstName: profile.firstName,
         lastName: profile.lastName,
         email: profile.email,
-        role: m.role,
+        roles: m.roles,
+        position: m.position,
       });
     }
   }
@@ -103,9 +120,8 @@ export async function addGroupMember(
   groupId: string,
   clubId: string,
   userId: string,
-  role: GroupRole
+  roles: GroupRole[]
 ): Promise<void> {
-  // Check if already a member
   const q = query(
     collection(db, "groupMembers"),
     where("groupId", "==", groupId),
@@ -120,30 +136,40 @@ export async function addGroupMember(
     groupId,
     clubId,
     userId,
-    role,
+    roles,
     createdAt: serverTimestamp(),
   });
 }
 
-export async function getUserGroupIds(userId: string): Promise<string[]> {
+export interface UserGroupMembership {
+  groupId: string;
+  roles: GroupRole[];
+}
+
+export async function getUserGroupMemberships(
+  userId: string
+): Promise<UserGroupMembership[]> {
   const q = query(
     collection(db, "groupMembers"),
     where("userId", "==", userId)
   );
   const snapshot = await getDocs(q);
-  return snapshot.docs.map((d) => (d.data() as GroupMember).groupId);
+  return snapshot.docs.map((d) => {
+    const data = d.data() as GroupMember;
+    return { groupId: data.groupId, roles: data.roles };
+  });
 }
 
-export async function setUserGroups(
+export async function setUserGroupsForRole(
   userId: string,
   clubId: string,
-  groupIds: string[],
-  currentGroupIds: string[]
+  newGroupIds: string[],
+  currentGroupIds: string[],
+  role: GroupRole
 ): Promise<void> {
-  const toAdd = groupIds.filter((id) => !currentGroupIds.includes(id));
-  const toRemove = currentGroupIds.filter((id) => !groupIds.includes(id));
+  const toAdd = newGroupIds.filter((id) => !currentGroupIds.includes(id));
+  const toRemove = currentGroupIds.filter((id) => !newGroupIds.includes(id));
 
-  // Remove memberships
   for (const groupId of toRemove) {
     const q = query(
       collection(db, "groupMembers"),
@@ -151,18 +177,39 @@ export async function setUserGroups(
       where("userId", "==", userId)
     );
     const snapshot = await getDocs(q);
-    await Promise.all(snapshot.docs.map((d) => deleteDoc(d.ref)));
+    for (const d of snapshot.docs) {
+      const data = d.data() as GroupMember;
+      const remainingRoles = data.roles.filter((r) => r !== role);
+      if (remainingRoles.length === 0) {
+        await deleteDoc(d.ref);
+      } else {
+        await updateDoc(d.ref, { roles: remainingRoles });
+      }
+    }
   }
 
-  // Add memberships
   for (const groupId of toAdd) {
-    await addDoc(collection(db, "groupMembers"), {
-      groupId,
-      clubId,
-      userId,
-      role: "player" as GroupRole,
-      createdAt: serverTimestamp(),
-    });
+    const q = query(
+      collection(db, "groupMembers"),
+      where("groupId", "==", groupId),
+      where("userId", "==", userId)
+    );
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) {
+      await addDoc(collection(db, "groupMembers"), {
+        groupId,
+        clubId,
+        userId,
+        roles: [role],
+        createdAt: serverTimestamp(),
+      });
+    } else {
+      const d = snapshot.docs[0];
+      const data = d.data() as GroupMember;
+      if (!data.roles.includes(role)) {
+        await updateDoc(d.ref, { roles: [...data.roles, role] });
+      }
+    }
   }
 }
 
@@ -170,9 +217,16 @@ export async function removeGroupMember(memberId: string): Promise<void> {
   await deleteDoc(doc(db, "groupMembers", memberId));
 }
 
-export async function updateGroupMemberRole(
+export async function updateGroupMemberRoles(
   memberId: string,
-  role: GroupRole
+  roles: GroupRole[]
 ): Promise<void> {
-  await updateDoc(doc(db, "groupMembers", memberId), { role });
+  await updateDoc(doc(db, "groupMembers", memberId), { roles });
+}
+
+export async function updateGroupMemberPosition(
+  memberId: string,
+  position: Position | null
+): Promise<void> {
+  await updateDoc(doc(db, "groupMembers", memberId), { position: position ?? null });
 }

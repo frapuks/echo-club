@@ -14,6 +14,7 @@ import { db } from "../config/firebase";
 export interface Club {
   name: string;
   inviteCode: string;
+  categories: string[];
 }
 
 export async function createClub(
@@ -25,6 +26,7 @@ export async function createClub(
   const clubRef = await addDoc(collection(db, "clubs"), {
     name: clubName,
     inviteCode: code,
+    categories: ["Seniors", "-18", "-17", "-15", "-13"],
     createdAt: serverTimestamp(),
     createdBy: uid,
   });
@@ -40,6 +42,13 @@ export async function updateClub(
   data: { name: string }
 ): Promise<void> {
   await updateDoc(doc(db, "clubs", clubId), data);
+}
+
+export async function updateClubCategories(
+  clubId: string,
+  categories: string[]
+): Promise<void> {
+  await updateDoc(doc(db, "clubs", clubId), { categories });
 }
 
 export async function getClub(clubId: string): Promise<Club | null> {
