@@ -160,20 +160,6 @@ export default function ProfilePage() {
               helperText="L'email ne peut pas être modifié."
             />
 
-            <TextField
-              label="Rôle"
-              fullWidth
-              margin="normal"
-              value={
-                userProfile?.role === "admin"
-                  ? "Administrateur"
-                  : userProfile?.role === "coach"
-                    ? "Coach"
-                    : "Joueur"
-              }
-              disabled
-            />
-
             <Button
               type="submit"
               variant="contained"

@@ -19,7 +19,6 @@ interface RegisterForm {
   email: string;
   password: string;
   confirmPassword: string;
-  invitationCode: string;
 }
 
 function getErrorMessage(code: string): string {
@@ -28,8 +27,6 @@ function getErrorMessage(code: string): string {
       return "Cet email est déjà utilisé.";
     case "auth/weak-password":
       return "Le mot de passe doit contenir au moins 6 caractères.";
-    case "INVALID_INVITATION_CODE":
-      return "Code d'invitation invalide ou déjà utilisé.";
     default:
       return "Une erreur est survenue. Veuillez réessayer.";
   }
@@ -62,16 +59,11 @@ export default function RegisterPage() {
         password: data.password,
         firstName: data.firstName,
         lastName: data.lastName,
-        invitationCode: data.invitationCode,
       });
     } catch (err: unknown) {
       console.error("Registration error:", err);
-      const firebaseError = err as { code?: string; message?: string };
-      const code =
-        firebaseError.message === "INVALID_INVITATION_CODE"
-          ? "INVALID_INVITATION_CODE"
-          : firebaseError.code ?? "";
-      setError(getErrorMessage(code));
+      const firebaseError = err as { code?: string };
+      setError(getErrorMessage(firebaseError.code ?? ""));
     } finally {
       setSubmitting(false);
     }
@@ -161,18 +153,6 @@ export default function RegisterPage() {
               validate: (value) =>
                 value === password ||
                 "Les mots de passe ne correspondent pas.",
-            })}
-          />
-
-          <TextField
-            label="Code d'invitation"
-            fullWidth
-            margin="normal"
-            error={!!errors.invitationCode}
-            helperText={errors.invitationCode?.message}
-            slotProps={{ htmlInput: { style: { textTransform: "uppercase" } } }}
-            {...register("invitationCode", {
-              required: "Le code d'invitation est requis.",
             })}
           />
 

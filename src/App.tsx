@@ -7,6 +7,9 @@ import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import DashboardPage from "./pages/DashboardPage";
 import ProfilePage from "./pages/ProfilePage";
+import MembersPage from "./pages/MembersPage";
+import ClubSettingsPage from "./pages/ClubSettingsPage";
+import GroupDetailPage from "./pages/GroupDetailPage";
 
 export default function App() {
   return (
@@ -22,6 +25,9 @@ export default function App() {
             <Route element={<AppLayout />}>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/profil" element={<ProfilePage />} />
+              <Route path="/membres" element={<MembersPage />} />
+              <Route path="/club" element={<ClubSettingsPage />} />
+              <Route path="/groupes/:groupId" element={<GroupDetailPage />} />
             </Route>
           </Route>
         </Routes>
