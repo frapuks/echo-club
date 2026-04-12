@@ -11,6 +11,7 @@ import {
 } from "@mui/material";
 import AccountCircle from "@mui/icons-material/AccountCircle";
 import { useAuth } from "../../contexts/AuthContext";
+import AppLogo from "../AppLogo";
 
 export default function AppLayout() {
   const { userProfile, logout } = useAuth();
@@ -35,9 +36,9 @@ export default function AppLayout() {
     <Box sx={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
       <AppBar position="static">
         <Toolbar>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Echo Club
-          </Typography>
+          <Box sx={{ flexGrow: 1 }}>
+            <AppLogo size="small" onClick={() => navigate("/")} />
+          </Box>
 
           {userProfile && (
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -54,6 +55,9 @@ export default function AppLayout() {
                 anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
                 transformOrigin={{ vertical: "top", horizontal: "right" }}
               >
+                <MenuItem onClick={() => { handleClose(); navigate("/profil"); }}>
+                  Mon profil
+                </MenuItem>
                 <MenuItem onClick={handleLogout}>Se déconnecter</MenuItem>
               </Menu>
             </Box>

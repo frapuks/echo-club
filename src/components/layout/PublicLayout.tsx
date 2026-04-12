@@ -1,5 +1,6 @@
 import { Outlet } from "react-router";
-import { Box, Container, Typography } from "@mui/material";
+import { Box, Container } from "@mui/material";
+import AppLogo from "../AppLogo";
 
 export default function PublicLayout() {
   return (
@@ -13,14 +14,9 @@ export default function PublicLayout() {
       }}
     >
       <Container maxWidth="sm">
-        <Typography
-          variant="h4"
-          component="h1"
-          align="center"
-          sx={{ mb: 4, fontWeight: 700 }}
-        >
-          ECHO CLUB
-        </Typography>
+        <Box sx={{ display: "flex", justifyContent: "center", mb: 4 }}>
+          <AppLogo size="large" />
+        </Box>
         <Outlet />
       </Container>
     </Box>

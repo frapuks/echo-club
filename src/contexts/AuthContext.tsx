@@ -28,6 +28,7 @@ interface AuthState {
     invitationCode: string;
   }) => Promise<void>;
   logout: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -76,9 +77,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await logoutService();
   };
 
+  const refreshProfile = async () => {
+    if (user) {
+      const profileDoc = await getDoc(doc(db, "users", user.uid));
+      if (profileDoc.exists()) {
+        setUserProfile(profileDoc.data() as UserProfile);
+      }
+    }
+  };
+
   return (
     <AuthContext.Provider
-      value={{ user, userProfile, loading, login, register, logout }}
+      value={{ user, userProfile, loading, login, register, logout, refreshProfile }}
     >
       {children}
     </AuthContext.Provider>
