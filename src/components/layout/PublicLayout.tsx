@@ -19,7 +19,7 @@ export default function PublicLayout() {
           align="center"
           sx={{ mb: 4, fontWeight: 700 }}
         >
-          Echo Club
+          ECHO CLUB
         </Typography>
         <Outlet />
       </Container>
