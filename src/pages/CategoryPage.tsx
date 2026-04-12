@@ -1,14 +1,11 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate, Navigate } from "react-router";
+import { useParams, Navigate } from "react-router";
 import { useForm } from "react-hook-form";
 import {
   Alert,
   Autocomplete,
   Box,
   Button,
-  Card,
-  CardActionArea,
-  CardContent,
   Chip,
   CircularProgress,
   Dialog,
@@ -19,17 +16,18 @@ import {
   MenuItem,
   Paper,
   Select,
+  Tab,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
+  Tabs,
   TextField,
   Typography,
 } from "@mui/material";
 import Add from "@mui/icons-material/Add";
-import GroupIcon from "@mui/icons-material/Group";
 import { useAuth } from "../contexts/AuthContext";
 import { canManageCategory } from "../utils/permissions";
 import {
@@ -58,23 +56,23 @@ interface MemberRow extends MemberWithId {
 export default function CategoryPage() {
   const { category } = useParams<{ category: string }>();
   const { userProfile } = useAuth();
-  const navigate = useNavigate();
 
   const cat = category ?? "";
   const canManage = canManageCategory(userProfile, cat);
 
-  // Allow access if admin, coach of this category, or player of this category
   const hasAccess =
     userProfile?.admin ||
     (userProfile?.coachCategories ?? []).includes(cat) ||
     (userProfile?.playerCategories ?? []).includes(cat);
 
+  const [tab, setTab] = useState(0);
   const [groups, setGroups] = useState<GroupWithId[]>([]);
   const [coaches, setCoaches] = useState<MemberRow[]>([]);
   const [players, setPlayers] = useState<MemberRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const [positionFilter, setPositionFilter] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const form = useForm<CreateGroupForm>();
@@ -186,21 +184,21 @@ export default function CategoryPage() {
     );
   }
 
+  // Tab 0 = "Tous", Tab 1+ = groups
+  const selectedGroup = tab > 0 ? groups[tab - 1] : null;
+
+  const filteredCoaches = selectedGroup
+    ? coaches.filter((c) => c.groupIds.includes(selectedGroup.id))
+    : coaches;
+
+  const filteredPlayers = selectedGroup
+    ? players.filter((p) => p.groupIds.includes(selectedGroup.id))
+    : players;
+
   return (
     <Box>
-      <Typography variant="h4" sx={{ mb: 3 }}>
-        {cat}
-      </Typography>
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError("")}>
-          {error}
-        </Alert>
-      )}
-
-      {/* Groupes */}
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-        <Typography variant="h5">Groupes</Typography>
+        <Typography variant="h4">{cat}</Typography>
         {canManage && (
           <Button variant="contained" size="small" startIcon={<Add />} onClick={() => setDialogOpen(true)}>
             Créer un groupe
@@ -208,48 +206,69 @@ export default function CategoryPage() {
         )}
       </Box>
 
-      {groups.length === 0 ? (
-        <Typography color="text.secondary" sx={{ mb: 3 }}>
-          Aucun groupe dans cette catégorie.
-        </Typography>
-      ) : (
-        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 2, mb: 4 }}>
-          {groups.map((group) => (
-            <Card key={group.id}>
-              <CardActionArea onClick={() => navigate(`/groupes/${group.id}`)}>
-                <CardContent sx={{ display: "flex", alignItems: "center", gap: 1.5, py: 1.5 }}>
-                  <GroupIcon color="primary" fontSize="small" />
-                  <Typography variant="subtitle1">{group.name}</Typography>
-                </CardContent>
-              </CardActionArea>
-            </Card>
-          ))}
-        </Box>
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError("")}>
+          {error}
+        </Alert>
       )}
+
+      <Tabs
+        value={tab}
+        onChange={(_e, v) => setTab(v)}
+        sx={{ mb: 3 }}
+        variant="scrollable"
+        scrollButtons="auto"
+      >
+        <Tab label="Tous" />
+        {groups.map((g) => (
+          <Tab key={g.id} label={g.name} />
+        ))}
+      </Tabs>
 
       {/* Coachs */}
       <Typography variant="h5" sx={{ mb: 2 }}>
         Coachs
       </Typography>
       <MemberTable
-        members={coaches}
+        members={filteredCoaches}
         groups={groups}
         canManage={canManage}
         showPosition={false}
-        emptyMessage="Aucun coach dans cette catégorie."
+        showGroups={!selectedGroup}
+        emptyMessage="Aucun coach."
         onGroupsChange={(uid, newIds, currentIds) => handleGroupsChange(uid, newIds, currentIds, "coaches")}
       />
 
       {/* Joueurs */}
-      <Typography variant="h5" sx={{ mt: 4, mb: 2 }}>
+      <Typography variant="h5" sx={{ mt: 4, mb: 1 }}>
         Joueurs
       </Typography>
+      <Tabs
+        value={positionFilter}
+        onChange={(_e, v) => setPositionFilter(v)}
+        sx={{ mb: 2 }}
+        variant="scrollable"
+        scrollButtons="auto"
+      >
+        <Tab label="Tous" />
+        {POSITIONS.map((p) => (
+          <Tab key={p} label={p} />
+        ))}
+        <Tab label="Non défini" />
+      </Tabs>
       <MemberTable
-        members={players}
+        members={
+          positionFilter === 0
+            ? filteredPlayers
+            : positionFilter <= POSITIONS.length
+              ? filteredPlayers.filter((p) => p.position === POSITIONS[positionFilter - 1])
+              : filteredPlayers.filter((p) => !p.position)
+        }
         groups={groups}
         canManage={canManage}
         showPosition={true}
-        emptyMessage="Aucun joueur dans cette catégorie."
+        showGroups={!selectedGroup}
+        emptyMessage="Aucun joueur."
         onGroupsChange={(uid, newIds, currentIds) => handleGroupsChange(uid, newIds, currentIds, "players")}
         onPositionChange={handlePositionChange}
       />
@@ -286,6 +305,7 @@ function MemberTable({
   groups,
   canManage,
   showPosition = false,
+  showGroups = true,
   emptyMessage,
   onGroupsChange,
   onPositionChange,
@@ -294,10 +314,13 @@ function MemberTable({
   groups: GroupWithId[];
   canManage: boolean;
   showPosition?: boolean;
+  showGroups?: boolean;
   emptyMessage: string;
   onGroupsChange: (uid: string, newGroupIds: string[], currentGroupIds: string[]) => void;
   onPositionChange?: (uid: string, position: Position | null) => void;
 }) {
+  const colCount = 2 + (showPosition ? 1 : 0) + (showGroups ? 1 : 0);
+
   return (
     <TableContainer component={Paper}>
       <Table>
@@ -305,9 +328,8 @@ function MemberTable({
           <TableRow>
             <TableCell>Nom</TableCell>
             <TableCell>Prénom</TableCell>
-            <TableCell>Email</TableCell>
             {showPosition && <TableCell>Poste</TableCell>}
-            <TableCell>Groupes</TableCell>
+            {showGroups && <TableCell>Groupes</TableCell>}
           </TableRow>
         </TableHead>
         <TableBody>
@@ -317,7 +339,6 @@ function MemberTable({
               <TableRow key={member.uid}>
                 <TableCell>{member.lastName}</TableCell>
                 <TableCell>{member.firstName}</TableCell>
-                <TableCell>{member.email}</TableCell>
                 {showPosition && (
                   <TableCell>
                     {canManage && onPositionChange ? (
@@ -345,42 +366,44 @@ function MemberTable({
                     )}
                   </TableCell>
                 )}
-                <TableCell sx={{ minWidth: 250 }}>
-                  {canManage ? (
-                    <Autocomplete
-                      multiple
-                      size="small"
-                      options={groups}
-                      getOptionLabel={(g) => g.name}
-                      value={memberGroups}
-                      isOptionEqualToValue={(opt, val) => opt.id === val.id}
-                      onChange={(_e, newValue) =>
-                        onGroupsChange(
-                          member.uid,
-                          newValue.map((g) => g.id),
-                          member.groupIds,
-                        )
-                      }
-                      renderInput={(params) => <TextField {...params} />}
-                    />
-                  ) : (
-                    <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
-                      {memberGroups.length > 0 ? (
-                        memberGroups.map((g) => <Chip key={g.id} label={g.name} size="small" />)
-                      ) : (
-                        <Typography variant="body2" color="text.secondary">
-                          Aucun groupe
-                        </Typography>
-                      )}
-                    </Box>
-                  )}
-                </TableCell>
+                {showGroups && (
+                  <TableCell sx={{ minWidth: 250 }}>
+                    {canManage ? (
+                      <Autocomplete
+                        multiple
+                        size="small"
+                        options={groups}
+                        getOptionLabel={(g) => g.name}
+                        value={memberGroups}
+                        isOptionEqualToValue={(opt, val) => opt.id === val.id}
+                        onChange={(_e, newValue) =>
+                          onGroupsChange(
+                            member.uid,
+                            newValue.map((g) => g.id),
+                            member.groupIds,
+                          )
+                        }
+                        renderInput={(params) => <TextField {...params} />}
+                      />
+                    ) : (
+                      <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+                        {memberGroups.length > 0 ? (
+                          memberGroups.map((g) => <Chip key={g.id} label={g.name} size="small" />)
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            Aucun groupe
+                          </Typography>
+                        )}
+                      </Box>
+                    )}
+                  </TableCell>
+                )}
               </TableRow>
             );
           })}
           {members.length === 0 && (
             <TableRow>
-              <TableCell colSpan={showPosition ? 5 : 4} align="center">
+              <TableCell colSpan={colCount} align="center">
                 {emptyMessage}
               </TableCell>
             </TableRow>

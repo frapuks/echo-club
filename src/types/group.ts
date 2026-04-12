@@ -32,12 +32,3 @@ export interface GroupMember {
   createdAt: Timestamp;
 }
 
-export interface GroupMemberWithProfile {
-  memberId: string;
-  userId: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  roles: GroupRole[];
-  position?: Position;
-}
