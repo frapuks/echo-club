@@ -20,22 +20,27 @@ import {
 } from "@mui/material";
 import type { EventType, CreateEventData } from "../../types/event";
 import type { GroupWithId } from "../../types/group";
+import type { VenueWithId } from "../../types/venue";
+
+const CUSTOM_VENUE = "__custom__";
 
 interface Props {
   open: boolean;
   onClose: () => void;
   clubId: string;
   availableGroups: GroupWithId[];
+  venues: VenueWithId[];
   onCreate: (data: CreateEventData) => Promise<void>;
 }
 
-export default function CreateEventDialog({ open, onClose, clubId, availableGroups, onCreate }: Props) {
+export default function CreateEventDialog({ open, onClose, clubId, availableGroups, venues, onCreate }: Props) {
   const [type, setType] = useState<EventType>("training");
   const [groupId, setGroupId] = useState("");
   const [name, setName] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
-  const [location, setLocation] = useState("");
+  const [venueChoice, setVenueChoice] = useState("");
+  const [customLocation, setCustomLocation] = useState("");
   const [opponent, setOpponent] = useState("");
   const [home, setHome] = useState(true);
   const [meetingTime, setMeetingTime] = useState("");
@@ -49,12 +54,19 @@ export default function CreateEventDialog({ open, onClose, clubId, availableGrou
     setName("");
     setDate("");
     setTime("");
-    setLocation("");
+    setVenueChoice("");
+    setCustomLocation("");
     setOpponent("");
     setHome(true);
     setMeetingTime("");
     setDescription("");
     setError("");
+  };
+
+  const resolvedLocation = (): string => {
+    if (venueChoice === CUSTOM_VENUE || venues.length === 0) return customLocation.trim();
+    const v = venues.find((x) => x.id === venueChoice);
+    return v ? `${v.name} — ${v.address}` : "";
   };
 
   const handleClose = () => {
@@ -82,7 +94,7 @@ export default function CreateEventDialog({ open, onClose, clubId, availableGrou
         clubId,
         groupId,
         date: buildDate(date, time),
-        location,
+        location: resolvedLocation(),
       };
 
       if (type === "training") {
@@ -194,13 +206,33 @@ export default function CreateEventDialog({ open, onClose, clubId, availableGrou
           />
         )}
 
-        <TextField
-          label="Lieu"
-          fullWidth
-          margin="normal"
-          value={location}
-          onChange={(e) => setLocation(e.target.value)}
-        />
+        {venues.length > 0 && (
+          <FormControl fullWidth margin="normal">
+            <InputLabel>Lieu</InputLabel>
+            <Select
+              value={venueChoice}
+              label="Lieu"
+              onChange={(e) => setVenueChoice(e.target.value)}
+            >
+              {venues.map((v) => (
+                <MenuItem key={v.id} value={v.id}>
+                  {v.name}
+                </MenuItem>
+              ))}
+              <MenuItem value={CUSTOM_VENUE}>Autre adresse…</MenuItem>
+            </Select>
+          </FormControl>
+        )}
+
+        {(venueChoice === CUSTOM_VENUE || venues.length === 0) && (
+          <TextField
+            label={venues.length === 0 ? "Lieu" : "Adresse"}
+            fullWidth
+            margin="normal"
+            value={customLocation}
+            onChange={(e) => setCustomLocation(e.target.value)}
+          />
+        )}
 
         {type === "other" && (
           <TextField

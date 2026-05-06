@@ -22,14 +22,17 @@ import {
   deleteEvent,
 } from "../services/events.service";
 import { getCategoryGroups } from "../services/groups.service";
+import { getClubVenues } from "../services/venues.service";
 import type { EventWithId, CreateEventData, EventType } from "../types/event";
 import type { GroupWithId } from "../types/group";
+import type { VenueWithId } from "../types/venue";
 
 export default function DashboardPage() {
   const { user, userProfile } = useAuth();
 
   const [events, setEvents] = useState<EventWithId[]>([]);
   const [groups, setGroups] = useState<GroupWithId[]>([]);
+  const [venues, setVenues] = useState<VenueWithId[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -69,6 +72,14 @@ export default function DashboardPage() {
       } catch (e) {
         console.error("Failed to load groups", e);
         setGroups([]);
+      }
+
+      try {
+        const vs = await getClubVenues(userProfile.clubId!);
+        setVenues(vs);
+      } catch (e) {
+        console.error("Failed to load venues", e);
+        setVenues([]);
       }
 
       setLoading(false);
@@ -214,6 +225,7 @@ export default function DashboardPage() {
           onClose={() => setDialogOpen(false)}
           clubId={userProfile.clubId}
           availableGroups={groups}
+          venues={venues}
           onCreate={handleCreate}
         />
       )}
