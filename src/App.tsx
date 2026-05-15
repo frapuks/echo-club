@@ -6,6 +6,7 @@ import AppLayout from "./components/layout/AppLayout";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import DashboardPage from "./pages/DashboardPage";
+import EventDetailPage from "./pages/EventDetailPage";
 import SettingsPage from "./pages/SettingsPage";
 
 export default function App() {
@@ -21,6 +22,7 @@ export default function App() {
           <Route element={<ProtectedRoute />}>
             <Route element={<AppLayout />}>
               <Route path="/" element={<DashboardPage />} />
+              <Route path="/evenements/:id" element={<EventDetailPage />} />
               <Route path="/reglages" element={<SettingsPage />} />
             </Route>
           </Route>

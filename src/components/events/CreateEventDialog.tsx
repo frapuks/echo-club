@@ -357,8 +357,11 @@ export default function CreateEventDialog({
       }
 
       handleClose();
-    } catch {
-      setError("Erreur lors de la création.");
+    } catch (e) {
+      console.error("Event submit failed", e);
+      setError(
+        e instanceof Error ? e.message : "Erreur lors de l'enregistrement.",
+      );
     } finally {
       setSubmitting(false);
     }

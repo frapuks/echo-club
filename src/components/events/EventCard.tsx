@@ -1,7 +1,9 @@
 import { useState } from "react";
+import { useNavigate } from "react-router";
 import {
   Box,
   Card,
+  CardActionArea,
   CardContent,
   Chip,
   Dialog,
@@ -48,9 +50,15 @@ const timeFormatter = new Intl.DateTimeFormat("fr-FR", {
 });
 
 export default function EventCard({ event, groupName, canDelete, onDelete, onDeleteSeries, onEdit }: Props) {
+  const navigate = useNavigate();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleteScope, setDeleteScope] = useState<"event" | "series">("event");
   const hasSeriesOption = !!event.seriesId && !!onDeleteSeries;
+
+  const stop = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+  };
 
   const openConfirm = () => {
     setDeleteScope("event");
@@ -83,58 +91,83 @@ export default function EventCard({ event, groupName, canDelete, onDelete, onDel
 
   return (
     <>
-      <Card sx={{ mb: 2 }}>
-        <CardContent sx={{ display: "flex", gap: 2, alignItems: "flex-start" }}>
-          <Box sx={{ mt: 0.5 }}>{icon}</Box>
-          <Box sx={{ flexGrow: 1 }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-              <Typography variant="h6" sx={{ lineHeight: 1.2 }}>{title}</Typography>
-              {event.type === "match" && (
-                <Chip
-                  size="small"
-                  label={event.home ? "Domicile" : "Extérieur"}
-                  color={event.home ? "primary" : "default"}
-                />
-              )}
-              {groupName && <Chip size="small" variant="outlined" label={groupName} />}
-            </Box>
-
-            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 1, color: "text.secondary" }}>
-              <AccessTime fontSize="small" />
-              <Typography variant="body2">{dateFormatter.format(date)}</Typography>
-            </Box>
-
-            {event.location && (
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 0.5, color: "text.secondary" }}>
-                <LocationOn fontSize="small" />
-                <Typography variant="body2">{event.location}</Typography>
+      <Card sx={{ mb: 2, position: "relative" }}>
+        <CardActionArea onClick={() => navigate(`/evenements/${event.id}`)}>
+          <CardContent sx={{ display: "flex", gap: 2, alignItems: "flex-start", pr: 10 }}>
+            <Box sx={{ mt: 0.5 }}>{icon}</Box>
+            <Box sx={{ flexGrow: 1 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                <Typography variant="h6" sx={{ lineHeight: 1.2 }}>{title}</Typography>
+                {event.type === "match" && (
+                  <Chip
+                    size="small"
+                    label={event.home ? "Domicile" : "Extérieur"}
+                    color={event.home ? "primary" : "default"}
+                  />
+                )}
+                {groupName && <Chip size="small" variant="outlined" label={groupName} />}
               </Box>
-            )}
 
-            {event.type === "match" && (
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                RDV à {timeFormatter.format(event.meetingTime.toDate())}
-              </Typography>
-            )}
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 1, color: "text.secondary" }}>
+                <AccessTime fontSize="small" />
+                <Typography variant="body2">{dateFormatter.format(date)}</Typography>
+              </Box>
 
-            {event.type === "other" && event.description && (
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                {event.description}
-              </Typography>
-            )}
-          </Box>
+              {event.location && (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 0.5, color: "text.secondary" }}>
+                  <LocationOn fontSize="small" />
+                  <Typography variant="body2">{event.location}</Typography>
+                </Box>
+              )}
 
+              {event.type === "match" && (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                  RDV à {timeFormatter.format(event.meetingTime.toDate())}
+                </Typography>
+              )}
+
+              {event.type === "other" && event.description && (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  {event.description}
+                </Typography>
+              )}
+            </Box>
+          </CardContent>
+        </CardActionArea>
+
+        <Box
+          sx={{
+            position: "absolute",
+            top: 8,
+            right: 8,
+            display: "flex",
+            gap: 0.5,
+          }}
+        >
           {onEdit && (
-            <IconButton size="small" onClick={() => onEdit(event)}>
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                stop(e);
+                onEdit(event);
+              }}
+            >
               <Edit fontSize="small" />
             </IconButton>
           )}
           {canDelete && (
-            <IconButton size="small" color="error" onClick={openConfirm}>
+            <IconButton
+              size="small"
+              color="error"
+              onClick={(e) => {
+                stop(e);
+                openConfirm();
+              }}
+            >
               <Delete fontSize="small" />
             </IconButton>
           )}
-        </CardContent>
+        </Box>
       </Card>
 
       <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)} maxWidth="xs" fullWidth>

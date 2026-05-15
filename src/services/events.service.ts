@@ -2,6 +2,7 @@ import {
   collection,
   query,
   where,
+  getDoc,
   getDocs,
   addDoc,
   updateDoc,
@@ -71,6 +72,12 @@ export async function getAllClubEvents(clubId: string): Promise<EventWithId[]> {
   const q = query(collection(db, "events"), where("clubId", "==", clubId));
   const snapshot = await getDocs(q);
   return snapshot.docs.map((d) => ({ id: d.id, ...(d.data() as ClubEvent) }));
+}
+
+export async function getEvent(eventId: string): Promise<EventWithId | null> {
+  const snap = await getDoc(doc(db, "events", eventId));
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...(snap.data() as ClubEvent) };
 }
 
 export async function createEvent(
