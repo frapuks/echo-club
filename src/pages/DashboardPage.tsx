@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Box,
-  Button,
   CircularProgress,
   Fab,
   Tab,
@@ -19,7 +18,11 @@ import {
   getUserEvents,
   getAllClubEvents,
   createEvent,
+  createEventsBatch,
+  updateEvent,
+  updateSeries,
   deleteEvent,
+  deleteSeriesFuture,
 } from "../services/events.service";
 import { getCategoryGroups } from "../services/groups.service";
 import { getClubVenues } from "../services/venues.service";
@@ -36,9 +39,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [typeFilter, setTypeFilter] = useState<"all" | EventType>("all");
-  const [showPast, setShowPast] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<"all" | EventType | "past">("all");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<EventWithId | null>(null);
 
   const isAdmin = userProfile?.admin === true;
   const coachCats = userProfile?.coachCategories ?? [];
@@ -93,6 +96,34 @@ export default function DashboardPage() {
     return m;
   }, [groups]);
 
+  const editingSeriesSlots = useMemo(() => {
+    if (!editingEvent?.seriesId) return [];
+    const now = new Date();
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    const map = new Map<string, { day: number; time: string }>();
+    for (const e of events) {
+      if (e.seriesId !== editingEvent.seriesId) continue;
+      const d = e.date.toDate();
+      if (d < now) continue;
+      const day = d.getDay();
+      const time = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      const key = `${day}_${time}`;
+      if (!map.has(key)) map.set(key, { day, time });
+    }
+    return Array.from(map.values());
+  }, [editingEvent, events]);
+
+  const editingSeriesEndDate = useMemo<Date | null>(() => {
+    if (!editingEvent?.seriesId) return null;
+    let max: Date | null = null;
+    for (const e of events) {
+      if (e.seriesId !== editingEvent.seriesId) continue;
+      const d = e.date.toDate();
+      if (!max || d > max) max = d;
+    }
+    return max;
+  }, [editingEvent, events]);
+
   const handleCreate = async (data: CreateEventData) => {
     if (!user) return;
     const id = await createEvent(data, user.uid);
@@ -101,6 +132,94 @@ export default function DashboardPage() {
       ...prev,
       { ...data, id, createdBy: user.uid } as unknown as EventWithId,
     ]);
+  };
+
+  const handleCreateMany = async (data: CreateEventData[]) => {
+    if (!user) return;
+    const created = await createEventsBatch(data, user.uid);
+    setEvents((prev) => [...prev, ...created]);
+  };
+
+  const handleUpdate = async (id: string, data: CreateEventData) => {
+    await updateEvent(id, data);
+    setEvents((prev) =>
+      prev.map((e) =>
+        e.id === id
+          ? ({ ...data, id, createdBy: e.createdBy } as unknown as EventWithId)
+          : e,
+      ),
+    );
+  };
+
+  const handleUpdateSeries = async (
+    seriesId: string,
+    sharedData: { groupId: string; location: string; name: string },
+    slotMappings: {
+      originalDay: number;
+      originalTime: string;
+      day: number;
+      time: string;
+    }[],
+    deletedSlots: { day: number; time: string }[],
+    newEndDate: Date | null,
+  ) => {
+    if (!user) return;
+    const cutoff = new Date();
+    const mappings = slotMappings.map((m) => ({
+      originalDay: m.originalDay,
+      originalTime: m.originalTime,
+      newDay: m.day,
+      newTime: m.time,
+    }));
+    if (!userProfile?.clubId) return;
+    const { updated, deletedIds, created } = await updateSeries(
+      seriesId,
+      userProfile.clubId,
+      sharedData,
+      mappings,
+      deletedSlots,
+      newEndDate,
+      cutoff,
+      user.uid,
+    );
+    const updatedById = new Map(updated.map((e) => [e.id, e]));
+    const deletedSet = new Set(deletedIds);
+    setEvents((prev) => [
+      ...prev
+        .filter((e) => !deletedSet.has(e.id))
+        .map((e) => updatedById.get(e.id) ?? e),
+      ...created,
+    ]);
+  };
+
+  const handleOpenCreate = () => {
+    setEditingEvent(null);
+    setDialogOpen(true);
+  };
+
+  const handleOpenEdit = (event: EventWithId) => {
+    setEditingEvent(event);
+    setDialogOpen(true);
+  };
+
+  const handleCloseDialog = () => {
+    setDialogOpen(false);
+    setEditingEvent(null);
+  };
+
+  const handleDeleteSeries = async (event: EventWithId) => {
+    if (!event.seriesId || !userProfile?.clubId) return;
+    try {
+      const deletedIds = await deleteSeriesFuture(
+        event.seriesId,
+        userProfile.clubId,
+        new Date(),
+      );
+      const deletedSet = new Set(deletedIds);
+      setEvents((prev) => prev.filter((e) => !deletedSet.has(e.id)));
+    } catch {
+      setError("Erreur lors de la suppression.");
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -125,15 +244,14 @@ export default function DashboardPage() {
   }
 
   const now = new Date();
-  const filteredByType = events.filter(
-    (e) => typeFilter === "all" || e.type === typeFilter,
-  );
+  const isPastTab = typeFilter === "past";
 
-  const upcoming = filteredByType
+  const upcoming = events
     .filter((e) => e.date.toDate() >= now)
+    .filter((e) => typeFilter === "all" || e.type === typeFilter)
     .sort((a, b) => a.date.toDate().getTime() - b.date.toDate().getTime());
 
-  const past = filteredByType
+  const past = events
     .filter((e) => e.date.toDate() < now)
     .sort((a, b) => b.date.toDate().getTime() - a.date.toDate().getTime());
 
@@ -163,9 +281,29 @@ export default function DashboardPage() {
         <Tab value="training" label="Entraînements" />
         <Tab value="match" label="Matchs" />
         <Tab value="other" label="Autres" />
+        <Tab value="past" label="Passés" />
       </Tabs>
 
-      {upcoming.length === 0 ? (
+      {isPastTab ? (
+        past.length === 0 ? (
+          <Typography color="text.secondary" sx={{ mb: 3 }}>
+            Aucun événement passé.
+          </Typography>
+        ) : (
+          past.map((e) => (
+            <Box key={e.id} sx={{ opacity: 0.6 }}>
+              <EventCard
+                event={e}
+                groupName={groupNameById[e.groupId]}
+                canDelete={canDeleteEvent(e)}
+                onDelete={handleDelete}
+                onDeleteSeries={canDeleteEvent(e) ? handleDeleteSeries : undefined}
+                onEdit={canDeleteEvent(e) ? handleOpenEdit : undefined}
+              />
+            </Box>
+          ))
+        )
+      ) : upcoming.length === 0 ? (
         <Typography color="text.secondary" sx={{ mb: 3 }}>
           Aucun événement à venir.
         </Typography>
@@ -177,58 +315,37 @@ export default function DashboardPage() {
             groupName={groupNameById[e.groupId]}
             canDelete={canDeleteEvent(e)}
             onDelete={handleDelete}
+            onDeleteSeries={canDeleteEvent(e) ? handleDeleteSeries : undefined}
+            onEdit={canDeleteEvent(e) ? handleOpenEdit : undefined}
           />
         ))
-      )}
-
-      {past.length > 0 && (
-        <Box sx={{ mt: 4 }}>
-          <Button
-            variant="outlined"
-            onClick={() => setShowPast(!showPast)}
-            fullWidth
-          >
-            {showPast
-              ? "Masquer les événements passés"
-              : `Afficher les événements passés (${past.length})`}
-          </Button>
-          {showPast && (
-            <Box sx={{ mt: 2 }}>
-              {past.map((e) => (
-                <Box key={e.id} sx={{ opacity: 0.6 }}>
-                  <EventCard
-                    event={e}
-                    groupName={groupNameById[e.groupId]}
-                    canDelete={canDeleteEvent(e)}
-                    onDelete={handleDelete}
-                  />
-                </Box>
-              ))}
-            </Box>
-          )}
-        </Box>
       )}
 
       {canCreate && (
         <Fab
           color="primary"
           sx={{ position: "fixed", bottom: 24, right: 24 }}
-          onClick={() => setDialogOpen(true)}
+          onClick={handleOpenCreate}
         >
           <Add />
         </Fab>
       )}
 
-      {canCreate && (
-        <CreateEventDialog
-          open={dialogOpen}
-          onClose={() => setDialogOpen(false)}
-          clubId={userProfile.clubId}
-          availableGroups={groups}
-          venues={venues}
-          onCreate={handleCreate}
-        />
-      )}
+      <CreateEventDialog
+        open={dialogOpen}
+        onClose={handleCloseDialog}
+        clubId={userProfile.clubId}
+        availableGroups={groups}
+        venues={venues}
+        seriesSlots={editingSeriesSlots}
+        seriesEndDate={editingSeriesEndDate}
+        onCreate={handleCreate}
+        onCreateMany={handleCreateMany}
+        editEvent={editingEvent}
+        onUpdate={handleUpdate}
+        onUpdateSeries={handleUpdateSeries}
+      />
+
     </Box>
   );
 }

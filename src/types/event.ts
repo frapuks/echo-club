@@ -7,6 +7,7 @@ interface BaseEvent {
   groupId: string;
   date: Timestamp;
   location: string;
+  seriesId?: string;
   createdAt: Timestamp;
   createdBy: string;
 }

@@ -11,9 +11,12 @@ import {
   DialogTitle,
   Button,
   IconButton,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
 import Delete from "@mui/icons-material/Delete";
+import Edit from "@mui/icons-material/Edit";
 import SportsHandball from "@mui/icons-material/SportsHandball";
 import FitnessCenter from "@mui/icons-material/FitnessCenter";
 import EventIcon from "@mui/icons-material/Event";
@@ -26,6 +29,8 @@ interface Props {
   groupName?: string;
   canDelete: boolean;
   onDelete: (id: string) => void;
+  onDeleteSeries?: (event: EventWithId) => void;
+  onEdit?: (event: EventWithId) => void;
 }
 
 const dateFormatter = new Intl.DateTimeFormat("fr-FR", {
@@ -42,8 +47,24 @@ const timeFormatter = new Intl.DateTimeFormat("fr-FR", {
   minute: "2-digit",
 });
 
-export default function EventCard({ event, groupName, canDelete, onDelete }: Props) {
+export default function EventCard({ event, groupName, canDelete, onDelete, onDeleteSeries, onEdit }: Props) {
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleteScope, setDeleteScope] = useState<"event" | "series">("event");
+  const hasSeriesOption = !!event.seriesId && !!onDeleteSeries;
+
+  const openConfirm = () => {
+    setDeleteScope("event");
+    setConfirmOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (deleteScope === "series" && event.seriesId && onDeleteSeries) {
+      onDeleteSeries(event);
+    } else {
+      onDelete(event.id);
+    }
+    setConfirmOpen(false);
+  };
 
   const date = event.date.toDate();
   const icon =
@@ -103,8 +124,13 @@ export default function EventCard({ event, groupName, canDelete, onDelete }: Pro
             )}
           </Box>
 
+          {onEdit && (
+            <IconButton size="small" onClick={() => onEdit(event)}>
+              <Edit fontSize="small" />
+            </IconButton>
+          )}
           {canDelete && (
-            <IconButton size="small" color="error" onClick={() => setConfirmOpen(true)}>
+            <IconButton size="small" color="error" onClick={openConfirm}>
               <Delete fontSize="small" />
             </IconButton>
           )}
@@ -114,18 +140,28 @@ export default function EventCard({ event, groupName, canDelete, onDelete }: Pro
       <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Supprimer l'événement</DialogTitle>
         <DialogContent>
-          <DialogContentText>Voulez-vous vraiment supprimer cet événement ?</DialogContentText>
+          {hasSeriesOption && (
+            <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
+              <ToggleButtonGroup
+                value={deleteScope}
+                exclusive
+                onChange={(_e, v) => v && setDeleteScope(v)}
+                size="small"
+              >
+                <ToggleButton value="event">Cet événement</ToggleButton>
+                <ToggleButton value="series">Tous les événements à venir</ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
+          )}
+          <DialogContentText>
+            {deleteScope === "series"
+              ? "Tous les événements à venir de cette série seront supprimés. Les événements passés seront conservés."
+              : "Voulez-vous vraiment supprimer cet événement ?"}
+          </DialogContentText>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmOpen(false)}>Annuler</Button>
-          <Button
-            color="error"
-            variant="contained"
-            onClick={() => {
-              onDelete(event.id);
-              setConfirmOpen(false);
-            }}
-          >
+          <Button color="error" variant="contained" onClick={confirmDelete}>
             Supprimer
           </Button>
         </DialogActions>
