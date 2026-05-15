@@ -2,12 +2,15 @@ import type { Timestamp } from "firebase/firestore";
 
 export type EventType = "training" | "match" | "other";
 
+export type InviteeResponse = "present" | "absent";
+
 interface BaseEvent {
   clubId: string;
   groupId: string;
   date: Timestamp;
   location: string;
   invitedUserIds?: string[];
+  responses?: Record<string, InviteeResponse>;
   seriesId?: string;
   createdAt: Timestamp;
   createdBy: string;

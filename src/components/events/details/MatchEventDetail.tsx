@@ -2,7 +2,11 @@ import { Box, Chip, Typography } from "@mui/material";
 import SportsHandball from "@mui/icons-material/SportsHandball";
 import EventDetailHeader from "./EventDetailHeader";
 import EventInvitees from "./EventInvitees";
-import type { EventWithId, MatchEvent } from "../../../types/event";
+import type {
+  EventWithId,
+  InviteeResponse,
+  MatchEvent,
+} from "../../../types/event";
 import type { GroupWithId } from "../../../types/group";
 import type { MemberWithId } from "../../../services/members.service";
 
@@ -15,9 +19,20 @@ interface Props {
   event: EventWithId;
   group: GroupWithId | null;
   invitees: MemberWithId[];
+  canEditResponses?: boolean;
+  onChangeResponse?: (
+    uid: string,
+    status: InviteeResponse | "none",
+  ) => void | Promise<void>;
 }
 
-export default function MatchEventDetail({ event, group, invitees }: Props) {
+export default function MatchEventDetail({
+  event,
+  group,
+  invitees,
+  canEditResponses,
+  onChangeResponse,
+}: Props) {
   const match = event as MatchEvent & { id: string };
   return (
     <Box>
@@ -34,7 +49,12 @@ export default function MatchEventDetail({ event, group, invitees }: Props) {
       <Typography variant="body1" sx={{ mt: 1 }}>
         Rendez-vous à <strong>{timeFormatter.format(match.meetingTime.toDate())}</strong>
       </Typography>
-      <EventInvitees invitees={invitees} />
+      <EventInvitees
+        invitees={invitees}
+        responses={event.responses}
+        canEdit={canEditResponses}
+        onChangeResponse={onChangeResponse}
+      />
     </Box>
   );
 }

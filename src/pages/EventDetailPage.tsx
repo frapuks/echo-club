@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { Alert, Box, Button, CircularProgress } from "@mui/material";
 import ArrowBack from "@mui/icons-material/ArrowBack";
-import { getEvent } from "../services/events.service";
+import { useAuth } from "../contexts/AuthContext";
+import { getEvent, setEventResponses } from "../services/events.service";
 import { getGroup } from "../services/groups.service";
 import { getClubMembers } from "../services/members.service";
-import type { EventWithId } from "../types/event";
+import type { EventWithId, InviteeResponse } from "../types/event";
 import type { GroupWithId } from "../types/group";
 import type { MemberWithId } from "../services/members.service";
 import TrainingEventDetail from "../components/events/details/TrainingEventDetail";
@@ -15,11 +16,38 @@ import OtherEventDetail from "../components/events/details/OtherEventDetail";
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { userProfile } = useAuth();
   const [event, setEvent] = useState<EventWithId | null>(null);
   const [group, setGroup] = useState<GroupWithId | null>(null);
   const [invitees, setInvitees] = useState<MemberWithId[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const canEditResponses = useMemo(() => {
+    if (!event || !userProfile) return false;
+    if (userProfile.admin) return true;
+    if (!group) return false;
+    return (userProfile.coachCategories ?? []).includes(group.category);
+  }, [event, group, userProfile]);
+
+  const handleChangeResponse = async (
+    uid: string,
+    status: InviteeResponse | "none",
+  ) => {
+    if (!event) return;
+    const current = { ...(event.responses ?? {}) };
+    if (status === "none") delete current[uid];
+    else current[uid] = status;
+    try {
+      await setEventResponses(event.id, current);
+      setEvent({ ...event, responses: current });
+    } catch (e) {
+      console.error("Failed to update response", e);
+      setError(
+        e instanceof Error ? e.message : "Erreur lors de la mise à jour.",
+      );
+    }
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -86,13 +114,31 @@ export default function EventDetailPage() {
       </Button>
 
       {event.type === "training" && (
-        <TrainingEventDetail event={event} group={group} invitees={invitees} />
+        <TrainingEventDetail
+          event={event}
+          group={group}
+          invitees={invitees}
+          canEditResponses={canEditResponses}
+          onChangeResponse={handleChangeResponse}
+        />
       )}
       {event.type === "match" && (
-        <MatchEventDetail event={event} group={group} invitees={invitees} />
+        <MatchEventDetail
+          event={event}
+          group={group}
+          invitees={invitees}
+          canEditResponses={canEditResponses}
+          onChangeResponse={handleChangeResponse}
+        />
       )}
       {event.type === "other" && (
-        <OtherEventDetail event={event} group={group} invitees={invitees} />
+        <OtherEventDetail
+          event={event}
+          group={group}
+          invitees={invitees}
+          canEditResponses={canEditResponses}
+          onChangeResponse={handleChangeResponse}
+        />
       )}
     </Box>
   );

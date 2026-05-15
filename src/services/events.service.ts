@@ -122,6 +122,13 @@ export async function updateEvent(
   await updateDoc(doc(db, "events", eventId), data);
 }
 
+export async function setEventResponses(
+  eventId: string,
+  responses: Record<string, "present" | "absent">,
+): Promise<void> {
+  await updateDoc(doc(db, "events", eventId), { responses });
+}
+
 export async function updateSeries(
   seriesId: string,
   clubId: string,
