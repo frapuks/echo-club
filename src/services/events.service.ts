@@ -30,27 +30,41 @@ import { getUserGroupMemberships } from "./groups.service";
 export async function getUserEvents(userId: string, clubId: string): Promise<EventWithId[]> {
   const memberships = await getUserGroupMemberships(userId);
   const groupIds = memberships.map((m) => m.groupId);
-  if (groupIds.length === 0) return [];
 
-  // Firestore "in" limit is 30 values — chunk if needed
-  const chunks: string[][] = [];
-  for (let i = 0; i < groupIds.length; i += 30) {
-    chunks.push(groupIds.slice(i, i + 30));
-  }
+  const resultsById = new Map<string, EventWithId>();
+  const addDocs = (docs: { id: string; data: () => unknown }[]) => {
+    for (const d of docs) {
+      if (!resultsById.has(d.id)) {
+        resultsById.set(d.id, { id: d.id, ...(d.data() as ClubEvent) });
+      }
+    }
+  };
 
-  const results: EventWithId[] = [];
-  for (const chunk of chunks) {
-    const q = query(
-      collection(db, "events"),
-      where("clubId", "==", clubId),
-      where("groupId", "in", chunk),
-    );
-    const snapshot = await getDocs(q);
-    for (const d of snapshot.docs) {
-      results.push({ id: d.id, ...(d.data() as ClubEvent) });
+  // Events whose primary group is one of the user's groups
+  if (groupIds.length > 0) {
+    // Firestore "in" limit is 30
+    for (let i = 0; i < groupIds.length; i += 30) {
+      const chunk = groupIds.slice(i, i + 30);
+      const primaryQ = query(
+        collection(db, "events"),
+        where("clubId", "==", clubId),
+        where("groupId", "in", chunk),
+      );
+      const primarySnap = await getDocs(primaryQ);
+      addDocs(primarySnap.docs);
     }
   }
-  return results;
+
+  // Events where the user is invited individually
+  const invitedUserQ = query(
+    collection(db, "events"),
+    where("clubId", "==", clubId),
+    where("invitedUserIds", "array-contains", userId),
+  );
+  const invitedUserSnap = await getDocs(invitedUserQ);
+  addDocs(invitedUserSnap.docs);
+
+  return Array.from(resultsById.values());
 }
 
 export async function getAllClubEvents(clubId: string): Promise<EventWithId[]> {

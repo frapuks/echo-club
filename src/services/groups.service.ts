@@ -76,6 +76,15 @@ export interface UserGroupMembership {
   roles: GroupRole[];
 }
 
+export async function getClubGroupMembers(clubId: string): Promise<GroupMember[]> {
+  const q = query(
+    collection(db, "groupMembers"),
+    where("clubId", "==", clubId),
+  );
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((d) => d.data() as GroupMember);
+}
+
 export async function getUserGroupMemberships(
   userId: string
 ): Promise<UserGroupMembership[]> {

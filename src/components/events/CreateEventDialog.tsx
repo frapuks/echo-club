@@ -2,8 +2,11 @@ import { useEffect, useState } from "react";
 import { Timestamp } from "firebase/firestore";
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
+  Checkbox,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -12,6 +15,7 @@ import {
   FormControlLabel,
   IconButton,
   InputLabel,
+  ListSubheader,
   MenuItem,
   Select,
   Switch,
@@ -22,7 +26,14 @@ import {
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
-import type { EventType, CreateEventData, EventWithId } from "../../types/event";
+import CheckBoxOutlineBlankIcon from "@mui/icons-material/CheckBoxOutlineBlank";
+import CheckBoxIcon from "@mui/icons-material/CheckBox";
+import IndeterminateCheckBoxIcon from "@mui/icons-material/IndeterminateCheckBox";
+import type {
+  EventType,
+  CreateEventData,
+  EventWithId,
+} from "../../types/event";
 import type { GroupWithId } from "../../types/group";
 import type { VenueWithId } from "../../types/venue";
 
@@ -50,11 +61,19 @@ interface SeriesEditSlot {
   time: string;
 }
 
+export interface InviteOption {
+  uid: string;
+  displayName: string;
+  groupId: string;
+  groupName: string;
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
   clubId: string;
   availableGroups: GroupWithId[];
+  inviteOptions: InviteOption[];
   venues: VenueWithId[];
   seriesSlots: { day: number; time: string }[];
   seriesEndDate: Date | null;
@@ -74,13 +93,15 @@ interface Props {
 const pad = (n: number) => n.toString().padStart(2, "0");
 const formatDateInput = (d: Date) =>
   `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const formatTimeInput = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const formatTimeInput = (d: Date) =>
+  `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
 export default function CreateEventDialog({
   open,
   onClose,
   clubId,
   availableGroups,
+  inviteOptions,
   venues,
   seriesSlots,
   seriesEndDate,
@@ -115,6 +136,8 @@ export default function CreateEventDialog({
   const [editSeriesSlots, setEditSeriesSlots] = useState<SeriesEditSlot[]>([]);
   const [editSeriesEnd, setEditSeriesEnd] = useState("");
 
+  const [invitedUserIds, setInvitedUserIds] = useState<string[]>([]);
+
   const reset = () => {
     setType("training");
     setGroupId("");
@@ -132,6 +155,7 @@ export default function CreateEventDialog({
     setSlots([{ day: 2, time: "" }]);
     setStartDate("");
     setEndDate("");
+    setInvitedUserIds([]);
   };
 
   useEffect(() => {
@@ -153,6 +177,7 @@ export default function CreateEventDialog({
         })),
       );
       setEditSeriesEnd(seriesEndDate ? formatDateInput(seriesEndDate) : "");
+      setInvitedUserIds(editEvent.invitedUserIds ?? []);
 
       const matchedVenue = venues.find(
         (v) => `${v.name} — ${v.address}` === editEvent.location,
@@ -179,12 +204,14 @@ export default function CreateEventDialog({
       reset();
       setEditSeriesSlots([]);
       setEditSeriesEnd("");
+      if (availableGroups.length === 1) setGroupId(availableGroups[0].id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editEvent, open]);
 
   const resolvedLocation = (): string => {
-    if (venueChoice === CUSTOM_VENUE || venues.length === 0) return customLocation.trim();
+    if (venueChoice === CUSTOM_VENUE || venues.length === 0)
+      return customLocation.trim();
     const v = venues.find((x) => x.id === venueChoice);
     return v ? `${v.name} — ${v.address}` : "";
   };
@@ -202,7 +229,9 @@ export default function CreateEventDialog({
   const isSeriesEdit = isEditing && isPartOfSeries && editScope === "series";
 
   const updateEditSlot = (idx: number, patch: Partial<SeriesEditSlot>) =>
-    setEditSeriesSlots((prev) => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
+    setEditSeriesSlots((prev) =>
+      prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)),
+    );
   const removeEditSlot = (idx: number) =>
     setEditSeriesSlots((prev) => prev.filter((_, i) => i !== idx));
 
@@ -212,7 +241,8 @@ export default function CreateEventDialog({
       if (!name) return false;
       return editSeriesSlots.every((s) => !!s.time);
     }
-    if (type === "match") return !!date && !!time && !!opponent && !!meetingTime;
+    if (type === "match")
+      return !!date && !!time && !!opponent && !!meetingTime;
     if (type === "other") return !!date && !!time && !!name;
     if (type === "training") {
       if (!name) return false;
@@ -247,6 +277,7 @@ export default function CreateEventDialog({
           location,
           name,
           seriesId,
+          invitedUserIds,
         });
         cursor.setDate(cursor.getDate() + 7);
       }
@@ -258,7 +289,9 @@ export default function CreateEventDialog({
   const removeSlot = (idx: number) =>
     setSlots((prev) => prev.filter((_, i) => i !== idx));
   const updateSlot = (idx: number, patch: Partial<PeriodicSlot>) =>
-    setSlots((prev) => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
+    setSlots((prev) =>
+      prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)),
+    );
 
   const handleSubmit = async () => {
     if (!canSubmit()) return;
@@ -274,7 +307,9 @@ export default function CreateEventDialog({
         const deletedSlots = seriesSlots.filter(
           (s) => !remainingKeys.has(`${s.day}_${s.time}`),
         );
-        const newEnd = editSeriesEnd ? new Date(`${editSeriesEnd}T23:59:59`) : null;
+        const newEnd = editSeriesEnd
+          ? new Date(`${editSeriesEnd}T23:59:59`)
+          : null;
         await onUpdateSeries(
           editEvent.seriesId,
           { groupId, location, name },
@@ -296,6 +331,7 @@ export default function CreateEventDialog({
           groupId,
           date: buildDate(date, time),
           location,
+          invitedUserIds,
         };
 
         let data: CreateEventData;
@@ -330,9 +366,15 @@ export default function CreateEventDialog({
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-      <DialogTitle>{isEditing ? "Modifier l'événement" : "Créer un événement"}</DialogTitle>
+      <DialogTitle>
+        {isEditing ? "Modifier l'événement" : "Créer un événement"}
+      </DialogTitle>
       <DialogContent>
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
 
         {isPartOfSeries && (
           <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
@@ -363,17 +405,6 @@ export default function CreateEventDialog({
           </Box>
         )}
 
-        <FormControl fullWidth margin="normal">
-          <InputLabel>Groupe</InputLabel>
-          <Select value={groupId} label="Groupe" onChange={(e) => setGroupId(e.target.value)}>
-            {availableGroups.map((g) => (
-              <MenuItem key={g.id} value={g.id}>
-                {g.category} — {g.name}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-
         {type === "match" ? (
           <>
             <TextField
@@ -382,9 +413,15 @@ export default function CreateEventDialog({
               margin="normal"
               value={opponent}
               onChange={(e) => setOpponent(e.target.value)}
+              autoFocus
             />
             <FormControlLabel
-              control={<Switch checked={home} onChange={(e) => setHome(e.target.checked)} />}
+              control={
+                <Switch
+                  checked={home}
+                  onChange={(e) => setHome(e.target.checked)}
+                />
+              }
               label={home ? "Match à domicile" : "Match à l'extérieur"}
             />
           </>
@@ -395,13 +432,172 @@ export default function CreateEventDialog({
             margin="normal"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            autoFocus
+          />
+        )}
+
+        <FormControl
+          fullWidth
+          margin="normal"
+          disabled={availableGroups.length === 1}
+        >
+          <InputLabel>Groupe associé</InputLabel>
+          <Select
+            value={groupId}
+            label="Groupe associé"
+            onChange={(e) => setGroupId(e.target.value)}
+          >
+            {availableGroups.map((g) => (
+              <MenuItem key={g.id} value={g.id}>
+                {g.category} — {g.name}
+              </MenuItem>
+            ))}
+          </Select>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ mt: 0.5, ml: 1.5 }}
+          >
+            Tous les membres de ce groupe verront l'événement.
+          </Typography>
+        </FormControl>
+
+        {!isSeriesEdit && inviteOptions.length > 0 && (
+          <Autocomplete<InviteOption, true>
+            multiple
+            disableCloseOnSelect
+            options={inviteOptions}
+            groupBy={(o) => o.groupName}
+            getOptionLabel={(o) => o.displayName}
+            isOptionEqualToValue={(a, b) => a.uid === b.uid}
+            value={invitedUserIds
+              .map((uid) => inviteOptions.find((o) => o.uid === uid))
+              .filter((o): o is InviteOption => !!o)}
+            onChange={(_e, value) => {
+              const seen = new Set<string>();
+              const uids: string[] = [];
+              for (const o of value) {
+                if (!seen.has(o.uid)) {
+                  seen.add(o.uid);
+                  uids.push(o.uid);
+                }
+              }
+              setInvitedUserIds(uids);
+            }}
+            renderGroup={(params) => {
+              const groupUids = Array.from(
+                new Set(
+                  inviteOptions
+                    .filter((o) => o.groupName === params.group)
+                    .map((o) => o.uid),
+                ),
+              );
+              const selectedSet = new Set(invitedUserIds);
+              const allSelected =
+                groupUids.length > 0 &&
+                groupUids.every((uid) => selectedSet.has(uid));
+              const someSelected = groupUids.some((uid) =>
+                selectedSet.has(uid),
+              );
+
+              const toggleGroup = () => {
+                if (allSelected) {
+                  setInvitedUserIds(
+                    invitedUserIds.filter((uid) => !groupUids.includes(uid)),
+                  );
+                } else {
+                  const merged = new Set(invitedUserIds);
+                  for (const uid of groupUids) merged.add(uid);
+                  setInvitedUserIds(Array.from(merged));
+                }
+              };
+
+              return (
+                <li key={params.key}>
+                  <ListSubheader
+                    component="div"
+                    className="invite-group-header"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={toggleGroup}
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      cursor: "pointer",
+                      bgcolor: "action.hover",
+                      borderTop: "1px solid",
+                      borderBottom: "1px solid",
+                      borderColor: "divider",
+                      fontWeight: 600,
+                      color: "text.primary",
+                      lineHeight: 1.5,
+                      py: 0.5,
+                      "&:hover": { bgcolor: "action.selected" },
+                    }}
+                  >
+                    <Checkbox
+                      icon={<CheckBoxOutlineBlankIcon fontSize="small" />}
+                      checkedIcon={<CheckBoxIcon fontSize="small" />}
+                      indeterminateIcon={
+                        <IndeterminateCheckBoxIcon fontSize="small" />
+                      }
+                      sx={{ mr: 1, p: 0.5 }}
+                      checked={allSelected}
+                      indeterminate={someSelected && !allSelected}
+                    />
+                    {params.group}
+                  </ListSubheader>
+                  <ul style={{ padding: 0 }}>{params.children}</ul>
+                </li>
+              );
+            }}
+            renderOption={(props, option, { selected }) => {
+              const { key, ...rest } = props as React.HTMLAttributes<HTMLLIElement> & { key?: React.Key };
+              return (
+                <li key={key} {...rest}>
+                  <Checkbox
+                    icon={<CheckBoxOutlineBlankIcon fontSize="small" />}
+                    checkedIcon={<CheckBoxIcon fontSize="small" />}
+                    sx={{ mr: 1 }}
+                    checked={selected || invitedUserIds.includes(option.uid)}
+                  />
+                  {option.displayName}
+                </li>
+              );
+            }}
+            renderValue={(value, getItemProps) =>
+              value.map((o, index) => {
+                const { key: _k, ...itemProps } = getItemProps({ index });
+                return (
+                  <Chip
+                    key={o.uid}
+                    size="small"
+                    label={o.displayName}
+                    {...itemProps}
+                  />
+                );
+              })
+            }
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Invités"
+                margin="normal"
+                placeholder="Ajouter…"
+                helperText="Personnes invitées à participer à l'événement."
+              />
+            )}
           />
         )}
 
         {!isEditing && type === "training" && (
           <FormControlLabel
             sx={{ mt: 1 }}
-            control={<Switch checked={periodic} onChange={(e) => setPeriodic(e.target.checked)} />}
+            control={
+              <Switch
+                checked={periodic}
+                onChange={(e) => setPeriodic(e.target.checked)}
+              />
+            }
             label="Entraînement périodique (saison)"
           />
         )}
@@ -421,8 +617,13 @@ export default function CreateEventDialog({
             <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
               Créneaux à venir
             </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
-              Modifie le jour ou l'heure, ou supprime un créneau. Seuls les événements à venir sont impactés.
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: "block", mb: 1 }}
+            >
+              Modifie le jour ou l'heure, ou supprime un créneau. Seuls les
+              événements à venir sont impactés.
             </Typography>
             {editSeriesSlots.length === 0 ? (
               <Typography variant="body2" color="text.secondary">
@@ -430,13 +631,18 @@ export default function CreateEventDialog({
               </Typography>
             ) : (
               editSeriesSlots.map((slot, idx) => (
-                <Box key={`${slot.originalDay}_${slot.originalTime}`} sx={{ display: "flex", gap: 1, alignItems: "center", mb: 1 }}>
+                <Box
+                  key={`${slot.originalDay}_${slot.originalTime}`}
+                  sx={{ display: "flex", gap: 1, alignItems: "center", mb: 1 }}
+                >
                   <FormControl size="small" sx={{ flexGrow: 1 }}>
                     <InputLabel>Jour</InputLabel>
                     <Select
                       value={slot.day}
                       label="Jour"
-                      onChange={(e) => updateEditSlot(idx, { day: Number(e.target.value) })}
+                      onChange={(e) =>
+                        updateEditSlot(idx, { day: Number(e.target.value) })
+                      }
                     >
                       {WEEKDAYS.map((d) => (
                         <MenuItem key={d.value} value={d.value}>
@@ -451,7 +657,9 @@ export default function CreateEventDialog({
                     size="small"
                     slotProps={{ inputLabel: { shrink: true } }}
                     value={slot.time}
-                    onChange={(e) => updateEditSlot(idx, { time: e.target.value })}
+                    onChange={(e) =>
+                      updateEditSlot(idx, { time: e.target.value })
+                    }
                   />
                   <IconButton
                     size="small"
@@ -491,13 +699,18 @@ export default function CreateEventDialog({
               Créneaux hebdomadaires
             </Typography>
             {slots.map((slot, idx) => (
-              <Box key={idx} sx={{ display: "flex", gap: 1, alignItems: "center", mb: 1 }}>
+              <Box
+                key={idx}
+                sx={{ display: "flex", gap: 1, alignItems: "center", mb: 1 }}
+              >
                 <FormControl size="small" sx={{ flexGrow: 1 }}>
                   <InputLabel>Jour</InputLabel>
                   <Select
                     value={slot.day}
                     label="Jour"
-                    onChange={(e) => updateSlot(idx, { day: Number(e.target.value) })}
+                    onChange={(e) =>
+                      updateSlot(idx, { day: Number(e.target.value) })
+                    }
                   >
                     {WEEKDAYS.map((d) => (
                       <MenuItem key={d.value} value={d.value}>
@@ -524,7 +737,12 @@ export default function CreateEventDialog({
                 </IconButton>
               </Box>
             ))}
-            <Button size="small" startIcon={<AddIcon />} onClick={addSlot} sx={{ mt: 0.5 }}>
+            <Button
+              size="small"
+              startIcon={<AddIcon />}
+              onClick={addSlot}
+              sx={{ mt: 0.5 }}
+            >
               Ajouter un créneau
             </Button>
           </>
@@ -605,7 +823,11 @@ export default function CreateEventDialog({
       </DialogContent>
       <DialogActions>
         <Button onClick={handleClose}>Annuler</Button>
-        <Button variant="contained" onClick={handleSubmit} disabled={!canSubmit() || submitting}>
+        <Button
+          variant="contained"
+          onClick={handleSubmit}
+          disabled={!canSubmit() || submitting}
+        >
           {submitting
             ? isEditing
               ? "Sauvegarde..."

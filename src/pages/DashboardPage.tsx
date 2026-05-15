@@ -24,17 +24,26 @@ import {
   deleteEvent,
   deleteSeriesFuture,
 } from "../services/events.service";
-import { getCategoryGroups } from "../services/groups.service";
+import {
+  getCategoryGroups,
+  getUserGroupMemberships,
+  getGroup,
+  getClubGroupMembers,
+} from "../services/groups.service";
 import { getClubVenues } from "../services/venues.service";
+import { getClubMembers } from "../services/members.service";
 import type { EventWithId, CreateEventData, EventType } from "../types/event";
 import type { GroupWithId } from "../types/group";
 import type { VenueWithId } from "../types/venue";
+import type { InviteOption } from "../components/events/CreateEventDialog";
 
 export default function DashboardPage() {
   const { user, userProfile } = useAuth();
 
   const [events, setEvents] = useState<EventWithId[]>([]);
   const [groups, setGroups] = useState<GroupWithId[]>([]);
+  const [createGroups, setCreateGroups] = useState<GroupWithId[]>([]);
+  const [inviteOptions, setInviteOptions] = useState<InviteOption[]>([]);
   const [venues, setVenues] = useState<VenueWithId[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -63,6 +72,7 @@ export default function DashboardPage() {
         setEvents([]);
       }
 
+      let myGroups: GroupWithId[] = [];
       try {
         const club = await getClub(userProfile.clubId!);
         const catsToLoad = isAdmin ? (club?.categories ?? []) : coachCats;
@@ -71,6 +81,7 @@ export default function DashboardPage() {
           const catGroups = await getCategoryGroups(userProfile.clubId!, cat);
           allGroups.push(...catGroups);
         }
+        myGroups = allGroups;
         setGroups(allGroups);
       } catch (e) {
         console.error("Failed to load groups", e);
@@ -83,6 +94,76 @@ export default function DashboardPage() {
       } catch (e) {
         console.error("Failed to load venues", e);
         setVenues([]);
+      }
+
+      try {
+        // Groups the user is actually a member of (via groupMembers) — used as the "Groupe associé" choices
+        let userGroups: GroupWithId[] = [];
+        if (isAdmin) {
+          userGroups = myGroups;
+        } else {
+          const memberships = await getUserGroupMemberships(user.uid);
+          const ownGroupDocs = await Promise.all(
+            memberships.map((m) => getGroup(m.groupId)),
+          );
+          userGroups = ownGroupDocs.filter(
+            (g): g is GroupWithId => g !== null && g.clubId === userProfile.clubId,
+          );
+        }
+        setCreateGroups(userGroups);
+
+        // Broader "accessible" set used for the invite picker:
+        // admin → all groups; coach → user's groups ∪ groups in their coached categories
+        let accessibleGroups: GroupWithId[];
+        if (isAdmin) {
+          accessibleGroups = myGroups;
+        } else {
+          const coachGroupLists = await Promise.all(
+            (userProfile.coachCategories ?? []).map((c) =>
+              getCategoryGroups(userProfile.clubId!, c),
+            ),
+          );
+          const combined = new Map<string, GroupWithId>();
+          for (const g of [...userGroups, ...coachGroupLists.flat()]) combined.set(g.id, g);
+          accessibleGroups = Array.from(combined.values());
+        }
+
+        const accessibleIds = new Set(accessibleGroups.map((g) => g.id));
+        const groupNameById = new Map(
+          accessibleGroups.map((g) => [g.id, `${g.category} — ${g.name}`]),
+        );
+
+        const [members, clubMemberships] = await Promise.all([
+          getClubMembers(userProfile.clubId!),
+          getClubGroupMembers(userProfile.clubId!),
+        ]);
+        const memberByUid = new Map(members.map((m) => [m.uid, m]));
+
+        const options: InviteOption[] = [];
+        for (const gm of clubMemberships) {
+          if (!accessibleIds.has(gm.groupId)) continue;
+          const member = memberByUid.get(gm.userId);
+          if (!member) continue;
+          options.push({
+            uid: member.uid,
+            displayName:
+              member.displayName?.trim() ||
+              `${member.firstName ?? ""} ${member.lastName ?? ""}`.trim() ||
+              member.email,
+            groupId: gm.groupId,
+            groupName: groupNameById.get(gm.groupId) ?? "",
+          });
+        }
+        options.sort(
+          (a, b) =>
+            a.groupName.localeCompare(b.groupName) ||
+            a.displayName.localeCompare(b.displayName),
+        );
+        setInviteOptions(options);
+      } catch (e) {
+        console.error("Failed to load invite candidates", e);
+        setCreateGroups([]);
+        setInviteOptions([]);
       }
 
       setLoading(false);
@@ -335,7 +416,8 @@ export default function DashboardPage() {
         open={dialogOpen}
         onClose={handleCloseDialog}
         clubId={userProfile.clubId}
-        availableGroups={groups}
+        availableGroups={createGroups}
+        inviteOptions={inviteOptions}
         venues={venues}
         seriesSlots={editingSeriesSlots}
         seriesEndDate={editingSeriesEndDate}
